@@ -43,15 +43,19 @@ func serve_pixel(r *http.Request, pixel_id string) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path[5:7] == "s/" {
-		serve_pixel(r, r.URL.Path[7:])
-	} else if r.URL.Path[5:9] == "reg/" {
-		var new_pixel = create_pixel()
-		fmt.Fprintf(w, "{'id':%s}", new_pixel["_id"])
-		log.Printf("Issued pixel with UUID %s", new_pixel["_id"])
-	} else {
-    	log.Printf("Unknown path: %s", r.URL.Path[5:9])
-	}
+    if r.URL.Path[5:7] == "s/" {
+        serve_pixel(r, r.URL.Path[7:])
+    } else if r.URL.Path[5:9] == "reg/" {
+        if (r.Host == "localhost:5700" || r.Host == "127.0.0.1:5700") {
+            var new_pixel = create_pixel()
+            fmt.Fprintf(w, "{\"id\":%s}", new_pixel["_id"])
+            log.Printf("Issued pixel with UUID %s", new_pixel["_id"])
+        } else {
+            log.Printf("Trying to register a pixel from unathorized host %s", r.Host) 
+        }
+    } else {
+        log.Printf("Unknown path: %s", r.URL.Path[5:9])
+    }
 }
 
 var session, err = mgo.Dial("localhost")
@@ -59,5 +63,5 @@ var session, err = mgo.Dial("localhost")
 func main() {
     defer session.Close()
     http.HandleFunc("/pix/", handler)
-    http.ListenAndServe("localhost:5700", nil)
+    http.ListenAndServe(":5700", nil)
 }
