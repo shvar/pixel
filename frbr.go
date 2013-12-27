@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"time"
+    "fmt"
+    "log"
+    "net/http"
+    "net/url"
+    "time"
     "labix.org/v2/mgo"
     "labix.org/v2/mgo/bson"
     "code.google.com/p/go-uuid/uuid"
@@ -22,6 +23,14 @@ func create_pixel() Pixel {
 	return pixel
 }
 
+func notify_api(pixel_id string) {
+    n, err := http.PostForm("http://localhost:3000/api/v3/pixel", url.Values{"pixel": []string{pixel_id}})
+    if err != nil {
+        log.Printf("Error posting notification to gmd: %s", err)
+    }
+    n.Body.Close()
+}
+
 func serve_pixel(r *http.Request, pixel_id string) {
 	c := session.DB("pixels").C("potential")
 	result := Pixel{}
@@ -36,6 +45,7 @@ func serve_pixel(r *http.Request, pixel_id string) {
           log.Printf("Mark pixel as delivered: %s", pixel_id)
           result["timestamp"] = time.Now().Format(time.UnixDate)
           c.Insert(result)
+          notify_api(pixel_id)
         } else {
           log.Printf("Sorry, pixel already served: %s", pixel_id)
         }
