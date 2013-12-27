@@ -9,6 +9,7 @@ import (
     "labix.org/v2/mgo"
     "labix.org/v2/mgo/bson"
     "code.google.com/p/go-uuid/uuid"
+    "github.com/gorilla/mux"
 )
 
 type Pixel map[string]string
@@ -26,12 +27,15 @@ func create_pixel() Pixel {
 func notify_api(pixel_id string) {
     n, err := http.PostForm("http://localhost:3000/api/v3/pixel", url.Values{"pixel": []string{pixel_id}})
     if err != nil {
-        log.Printf("Error posting notification to gmd: %s", err)
+        log.Printf("Error posting notification to api: %s", err)
+    } else {
+        n.Body.Close()
     }
-    n.Body.Close()
 }
 
-func serve_pixel(r *http.Request, pixel_id string) {
+func serve_pixel(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    pixel_id := vars["pixel_id"]
 	c := session.DB("pixels").C("potential")
 	result := Pixel{}
 	err = c.Find(bson.M{"_id": pixel_id}).One(&result)
@@ -52,26 +56,23 @@ func serve_pixel(r *http.Request, pixel_id string) {
     }
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-    if r.URL.Path[5:7] == "s/" {
-        serve_pixel(r, r.URL.Path[7:])
-    } else if r.URL.Path[5:9] == "reg/" {
-        if (r.Host == "localhost:5700" || r.Host == "127.0.0.1:5700") {
-            var new_pixel = create_pixel()
-            fmt.Fprintf(w, "{\"id\":%s}", new_pixel["_id"])
-            log.Printf("Issued pixel with UUID %s", new_pixel["_id"])
-        } else {
-            log.Printf("Trying to register a pixel from unathorized host %s", r.Host) 
-        }
+func reg_pixel(w http.ResponseWriter, r *http.Request) {
+    if (r.Host == "localhost:5700" || r.Host == "127.0.0.1:5700") {
+        var new_pixel = create_pixel()
+        fmt.Fprintf(w, "{\"id\":%s}", new_pixel["_id"])
+        log.Printf("Issued pixel with UUID %s", new_pixel["_id"])
     } else {
-        log.Printf("Unknown path: %s", r.URL.Path[5:9])
+        log.Printf("Trying to register a pixel from unathorized host %s", r.Host) 
     }
 }
 
 var session, err = mgo.Dial("localhost")
 
 func main() {
-    defer session.Close()
-    http.HandleFunc("/pix/", handler)
+    mr := mux.NewRouter()
+    mr.HandleFunc("/pix/s/{pixel_id}", serve_pixel)
+    mr.HandleFunc("/pix/reg", reg_pixel)
+    mr.HandleFunc("/pix/reg/", reg_pixel)
+    http.Handle("/", mr)
     http.ListenAndServe(":5700", nil)
 }
